@@ -22,3 +22,4 @@ sympy==1.14.0
 torch==2.2.2
 typing_extensions==4.15.0
 tzdata==2025.2
+PyWavelets

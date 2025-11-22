@@ -16,7 +16,7 @@ class PriceFormationModel:
             }
         """
         self.theta = theta
-    def simulator(self, T: int, rng: np.random.Generator) -> dict:
+    def simulator(self, T: int, N: int, rng: np.random.Generator) -> dict:
         """
         Simulate N paths of length T.
         Returns dictionary containing the efficient price, midquote and midquote returns series:
@@ -27,10 +27,9 @@ class PriceFormationModel:
         }
         """
         
-        sigma_e = np.asarray(self.theta["sigma_e"], dtype = np.float64).reshape(-1)
-        sigma_eta = np.asarray(self.theta["sigma_eta"], dtype = np.float64).reshape(-1)
-        d = np.asarray(self.theta["delta"], dtype = np.float64).reshape(-1)
-        N = sigma_e.size
+        sigma_e = float(self.theta["sigma_e"])
+        sigma_eta = float(self.theta["sigma_eta"])
+        d = float(self.theta["delta"])
 
         effp = np.empty((T,N), dtype = np.float64)
         midq = np.empty((T,N), dtype = np.float64)
