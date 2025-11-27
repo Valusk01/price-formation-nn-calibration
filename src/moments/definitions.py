@@ -316,27 +316,36 @@ def realized_moments(midquote, returns, dtype):
     
 
     # --SCALE AND DISPERSION FEATURES--
-    feats.append(rv1); names.append("Realized_Variance1")
+    rv1_tr = np.log1p(rv1)
+    feats.append(rv1_tr); names.append("RV1_log1p")
 
     med_r1 = np.median(r1, axis=0)
     mad_r1 = np.median(np.abs(r1 - med_r1), axis=0).astype(dtype)
     q25, q75 = np.percentile(r1, [25, 75], axis=0)
     iqr_r1 = (q75 - q25).astype(dtype)
 
-    feats.append(mad_r1.astype(dtype)); names.append("MAD_r1")
-    feats.append(iqr_r1.astype(dtype)); names.append("IQR_r1")
+    feats.append(np.log1p(mad_r1)); names.append("MAD_r1_log1p")
+    feats.append(np.log1p(iqr_r1)); names.append("IQR_r1_log1p")
 
     denom = np.sqrt(np.maximum(rv1, v))
-    feats.append((mad_r1 / denom).astype(dtype)); names.append("MAD_over_sqrtRV1")
-    feats.append((iqr_r1 / denom).astype(dtype)); names.append("IQR_over_sqrtRV1")    
+    mad_norm = mad_r1 / denom
+    iqr_norm = iqr_r1 / denom
+    feats.append(np.log1p(mad_norm)); names.append("MAD_over_sqrtRV1_log1p")
+    feats.append(np.log1p(iqr_norm)); names.append("IQR_over_sqrtRV1_log1p")    
 
 
     # --VARIANCE RATIO FEATURES--
-    VR10  = var_ratio(10, m, rv1, dtype); feats.append(VR10); names.append("VR10")
-    VR20 = var_ratio(20, m, rv1, dtype);feats.append(VR20); names.append("VR20")
-    VR30 = var_ratio(30, m, rv1, dtype);feats.append(VR30); names.append("VR30")
-    VR50  = var_ratio(50, m, rv1, dtype);feats.append(VR50); names.append("VR50")
-    VR100 = var_ratio(100, m, rv1, dtype);feats.append(VR100); names.append("VR100")
+    VR10  = var_ratio(10, m, rv1, dtype)
+    VR20 = var_ratio(20, m, rv1, dtype)
+    VR30 = var_ratio(30, m, rv1, dtype)
+    VR50  = var_ratio(50, m, rv1, dtype)
+    VR100 = var_ratio(100, m, rv1, dtype)
+
+    feats.append(np.log1p(VR10));  names.append("VR10_log1p")
+    feats.append(np.log1p(VR20));  names.append("VR20_log1p")
+    feats.append(np.log1p(VR30));  names.append("VR30_log1p")
+    feats.append(np.log1p(VR50));  names.append("VR50_log1p")
+    feats.append(np.log1p(VR100)); names.append("VR100_log1p")
 
     # slope between 10-50 and 50-100
     base_vr_slope_10_50 = (VR50 - VR10) / 40.0
@@ -347,7 +356,8 @@ def realized_moments(midquote, returns, dtype):
     area = np.zeros(rv1.shape, dtype=dtype)
     for h in range(5, 51, 5):
         area += (1.0 - var_ratio(h, m, rv1, dtype))
-    feats.append(area); names.append("VR_AREA_DEF_5_50")
+    area_tr = np.log1p(np.maximum(area, 0.0))
+    feats.append(area_tr); names.append("VR_AREA_DEF_5_50_log1p")
     
     # second finite difference
     feats.append((VR50 - 2.0 * VR30 + VR10).astype(dtype))
@@ -358,17 +368,39 @@ def realized_moments(midquote, returns, dtype):
     ma_over_base = {}
     for k in [3, 5, 8]:
         var_ma = moving_avg_var(r1, k, dtype)     # variance of k-step moving average
-        feats.append(var_ma); names.append(f"MA{k}_VAR")
+        var_ma_tr = np.log1p(np.maximum(var_ma, 0.0))
+        feats.append(var_ma_tr); names.append(f"MA{k}_VAR_log1p")
 
-        ma_over = var_ma / rv1
-        feats.append(ma_over); names.append(f"MA{k}_VAR_over_RV1")
+        ma_over = np.where(rv1 == 0.0, 0.0, var_ma / rv1)
+        ma_over_tr = np.log1p(np.maximum(ma_over, 0.0))
+        feats.append(ma_over_tr); names.append(f"MA{k}_VAR_over_RV1_log1p")
         ma_over_base[k] = ma_over
 
-        resid = np.maximum(rv1 - var_ma, 0.0)
-        feats.append(resid); names.append(f"MA{k}_RESID_VAR")
 
-        resid_over = resid / rv1
-        feats.append(resid_over); names.append(f"MA{k}_RESID_VAR_over_RV1")
+        resid = np.maximum(rv1 - var_ma, 0.0)
+        resid_tr = np.log1p(np.maximum(resid, 0.0))
+        feats.append(resid_tr); names.append(f"MA{k}_RESID_VAR_log1p")
+
+        resid_over = np.where(rv1 == 0.0, 0.0, resid / rv1)
+        resid_over_tr = np.log1p(np.maximum(resid_over, 0.0))
+        feats.append(resid_over_tr); names.append(f"MA{k}_RESID_VAR_over_RV1_log1p")
+
+
+    # --SIGN-BASED FEATURES--
+    # sign of returns: +1 / -1 (0 is rare but allowed)
+    s = np.sign(r1)                    # (T-1, N)
+
+    # probability of a sign flip between t-1 and t
+    s_prev = s[:-1, :]                # (T-2, N)
+    s_curr = s[1:, :]                 # (T-2, N)
+    sign_flip = (s_curr != s_prev).astype(dtype)
+    p_flip_l1 = sign_flip.mean(axis=0).astype(dtype)   # (N,)
+
+    feats.append(p_flip_l1); names.append("P_SIGN_FLIP_L1")
+
+    # autocorrelation of the sign process at lag 1
+    rho_sign1, _ = acf_and_cov(s, 1, dtype=dtype)
+    feats.append(rho_sign1); names.append("ACF_SIGN_LAG1")
 
 
     # --AUTOCORRELATION AND COVARIANCE FEATURES--
@@ -379,40 +411,69 @@ def realized_moments(midquote, returns, dtype):
         rho_l, cov_l = acf_and_cov(r1, lag, dtype=dtype)
         rhos.append(rho_l)
         acf_base[lag] = rho_l
-        feats.append(rho_l); names.append(f"ACF_LAG{lag}")
+        rho_z = np.arctanh(np.clip(rho_l, -0.99, 0.99))
+        feats.append(rho_z); names.append(f"ACF_LAG{lag}_Z")
         feats.append(cov_l); names.append(f"COV_LAG{lag}")
 
     tot_neg_acfs = np.zeros_like(rhos[0], dtype=dtype)
     for rho_l in rhos:
         tot_neg_acfs += np.maximum(-rho_l,0.0)
-    feats.append(tot_neg_acfs); names.append("TOT_NEG_ACFS_lag1_5")
+    tot_neg_tr = np.log1p(np.maximum(tot_neg_acfs, 0.0))
+    feats.append(tot_neg_tr); names.append("NEG_ACF_MASS_L1_5_log1p")
+
+
+    # --AR(1) FIT ON RETURNS--
+    # r1_t = phi * r1_{t-1} + eps_t  (zero-intercept AR(1))
+    x = r1[:-1, :]    # r_{t-1}, shape (T-2, N)
+    y = r1[1:, :]     # r_{t},   shape (T-2, N)
+
+    # OLS slope per path: phi = sum(x*y) / sum(x^2)
+    num = (x * y).sum(axis=0)                     # (N,)
+    den = (x * x).sum(axis=0) + v                 # (N,), add v to avoid division by 0
+    phi = (num / den).astype(dtype)               # AR(1) coefficient per path
+    feats.append(phi); names.append("AR1_PHI")
+
+    # residual variance per path
+    resid = y - phi[None, :] * x                  # (T-2, N)
+    resid_var = resid.var(axis=0, ddof=1).astype(dtype)
+    feats.append(resid_var); names.append("AR1_RESID_VAR")
+
+    # R^2 of the AR(1) regression
+    var_y = y.var(axis=0, ddof=1)                 # Var(r_t)
+    R2 = 1.0 - resid_var / np.maximum(var_y, v)
+    feats.append(R2.astype(dtype)); names.append("AR1_R2")
 
 
     # --NORMALIZED VARIANCES OF SECOND AND THIRD DIFFERENCES--
     for g in [1,2,4,6]:
         acc2, acc3 = delta_var(m, rv1, g, dtype=dtype)
-        feats.append(acc2); names.append(f"ACCVAR_NORM_g{g}")
-        feats.append(acc3); names.append(f"ACC3VAR_NORM_g{g}")
+
+        acc2_tr = np.log1p(np.maximum(acc2, 0.0))
+        acc3_tr = np.log1p(np.maximum(acc3, 0.0))
+        feats.append(acc2_tr); names.append(f"ACCVAR_NORM_g{g}_log1p")
+        feats.append(acc3_tr); names.append(f"ACC3VAR_NORM_g{g}_log1p")
         
         acc3_over_acc2 = (acc3 / np.maximum(acc2, v)).astype(dtype)
-        feats.append(acc3_over_acc2); names.append(f"ACC3_OVER_ACC2_RATIO_g{g}")
+        acc3_over_tr = np.log1p(np.maximum(acc3_over_acc2, 0.0))
+        feats.append(acc3_over_tr); names.append(f"ACC3_OVER_ACC2_RATIO_g{g}_log1p")
 
 
     # --SPECTRAL FEATURES--
     bands =  [(0.15, 0.25), (0.075, 0.15), (0.01, 0.04)]  # frequency ranges (fast - mid - slow variation)
-    
+        
     tilt, band_pows = spectral_and_bandpowers(r1, bands, 3, dtype=dtype)  
-    feats.append(tilt); names.append("SPECTRAL_TILT")
+    tilt_tr = np.log1p(np.maximum(tilt, 0.0))
+    feats.append(tilt_tr); names.append("SPECTRAL_TILT_log1p")
 
-    # log1p of bandpowers
     bp_hf, bp_mid, bp_lf = band_pows
-    feats.append(np.log1p(bp_hf));  names.append("BP_HF_log1p")
-    feats.append(np.log1p(bp_mid)); names.append("BP_MID_log1p")
-    feats.append(np.log1p(bp_lf));  names.append("BP_LF_log1p")
+    feats.append(np.log1p(np.maximum(bp_hf, 0.0)));  names.append("BP_HF_log1p")
+    feats.append(np.log1p(np.maximum(bp_mid, 0.0))); names.append("BP_MID_log1p")
+    feats.append(np.log1p(np.maximum(bp_lf, 0.0)));  names.append("BP_LF_log1p")
 
-    # ratios HF/MID and HF/LF
-    feats.append(bp_hf / np.maximum(bp_mid, v)); names.append("BP_HF_over_MID")
-    feats.append(bp_hf / np.maximum(bp_lf,  v)); names.append("BP_HF_over_LF")
+    hf_over_mid = bp_hf / np.maximum(bp_mid, v)
+    hf_over_lf  = bp_hf / np.maximum(bp_lf,  v)
+    feats.append(np.log1p(np.maximum(hf_over_mid, 0.0))); names.append("BP_HF_over_MID_log1p")
+    feats.append(np.log1p(np.maximum(hf_over_lf,  0.0))); names.append("BP_HF_over_LF_log1p")
 
 
     # --HAAR WAVELET FEATURES--
@@ -486,14 +547,14 @@ def realized_moments(midquote, returns, dtype):
     hl_proxy21 = np.where(delta_hat21 <= v, 0.0, 1.0 / np.maximum(delta_hat21, v))
     hl_proxy31 = np.where(delta_hat31 <= v, 0.0, 1.0 / np.maximum(delta_hat31, v))
 
-    feats.append(hl_proxy21.astype(dtype)); names.append("HL_PROXY21")
-    feats.append(hl_proxy31.astype(dtype)); names.append("HL_PROXY31")
+    feats.append(np.log1p(np.maximum(hl_proxy21, 0.0)).astype(dtype)); names.append("HL_PROXY21_log1p")
+    feats.append(np.log1p(np.maximum(hl_proxy31, 0.0)).astype(dtype)); names.append("HL_PROXY31_log1p")
 
     proxy_a_sqrt_21 = a * np.sqrt(np.maximum(delta_hat21, 0.0))
     proxy_a_sqrt_31 = a * np.sqrt(np.maximum(delta_hat31, 0.0))
 
-    feats.append(proxy_a_sqrt_21.astype(dtype)); names.append("PROXY_a_sqrtNegLogRatio_21")
-    feats.append(proxy_a_sqrt_31.astype(dtype)); names.append("PROXY_a_sqrtNegLogRatio_31")
+    feats.append(np.log1p(np.maximum(proxy_a_sqrt_21, 0.0)).astype(dtype)); names.append("PROXY_a_sqrtNegLogRatio_21_log1p")
+    feats.append(np.log1p(np.maximum(proxy_a_sqrt_31, 0.0)).astype(dtype)); names.append("PROXY_a_sqrtNegLogRatio_31_log1p")
 
 
     # --DECIMATED FEATURES AND CONTRASTS--
