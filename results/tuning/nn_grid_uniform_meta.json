@@ -1,0 +1,50 @@
+{
+  "design_name": "uniform",
+  "DEPTH_LIST": [
+    2,
+    3,
+    4
+  ],
+  "WIDTH_LIST": [
+    64,
+    128,
+    256
+  ],
+  "DROPOUT_LIST": [
+    0.0,
+    0.1
+  ],
+  "RESIDUAL_LIST": [
+    false,
+    true
+  ],
+  "LR_LIST": [
+    0.001,
+    0.0003
+  ],
+  "WD_LIST": [
+    0.0,
+    0.0001,
+    0.001
+  ],
+  "LAMBDA_LIST": [
+    [
+      1.0,
+      1.0,
+      1.0
+    ],
+    [
+      1.0,
+      1.0,
+      2.0
+    ]
+  ],
+  "TRAIN_FRAC": 0.7,
+  "N_EPOCHS": 300,
+  "BATCH_SIZE": 256,
+  "PATIENCE": 30,
+  "RANDOM_SEED": 42,
+  "n_total": 30000,
+  "n_train": 21000,
+  "n_val": 9000
+}
